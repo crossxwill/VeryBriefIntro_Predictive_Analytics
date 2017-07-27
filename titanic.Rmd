@@ -1,0 +1,149 @@
+---
+title: "Surviving the Titanic"
+output: html_notebook
+---
+
+An R script is just a text file. You can open it with any text editor (such as Notepad or RStudio). R scripts are compact and are the most popular way to write R programs. However, long script files are very difficult to read.
+
+An alternative to a script is a notebook. An R Notebook is a document with code chunks that can be executed independently and interactively, with output visible immediately beneath the input. Notebooks are very useful for teaching and presenting results in a business-friendly format. Here's the `titanic.R` script converted into an R Notebook.
+
+
+## Goal
+
+Predict the probability of surviving the titanic.
+
+For example, in logistic regression, given the values of $X$, the probability of surviving is:$$\widehat{p} = \frac{e^{\beta{X}}}{1 + e^{\beta{X}}}$$
+
+## Find the Data
+
+```{r}
+??titanic
+
+library(earth)
+
+data(etitanic)
+
+?etitanic
+```
+
+## Explore the Data
+
+```{r}
+summary(etitanic)
+
+with(etitanic, table(survived))
+with(etitanic, table(survived, pclass))
+
+surv_count <- with(etitanic, table(survived))
+surv_by_class_count <- with(etitanic, table(survived, pclass))
+
+prop.table(surv_count)
+prop.table(surv_by_class_count, margin=1)
+prop.table(surv_by_class_count, margin=2)
+
+with(etitanic, plot(pclass, as.factor(survived), xlab="pclass"
+                    , ylab="Survival Rate"))
+
+with(etitanic, plot(sex, as.factor(survived), xlab="sex"
+                    , ylab="Survival Rate"))
+```
+
+## Transform the Data
+
+```{r}
+etitanic$survived_d <- as.factor(ifelse(etitanic$survived == 1, 'Alive', 'Dead'))
+
+etitanic$survived_d <- relevel(etitanic$survived_d, ref='Dead')
+
+summary(etitanic)
+
+table(etitanic$survived)
+
+etitanic2 <- subset(etitanic, select=-c(survived))
+
+summary(etitanic2)
+```
+
+## Split the Data between Train and Test
+
+```{r}
+library(caret)
+
+set.seed(1234)
+training <- createDataPartition(etitanic2$survived_d, p = 0.7, list=FALSE)
+
+trainData <- etitanic2[training,]
+testData <- etitanic2[-training,]
+```
+
+## Choose a performance metric
+
+```{r}
+fitControl <- trainControl(method="cv", classProbs = TRUE, summaryFunction = twoClassSummary)
+perfmetric <- "ROC"
+```
+
+## Try many algos 
+
+```{r}
+## logistic regression
+set.seed(1234)
+logit.mod <- train(survived_d ~ ., data=trainData, trControl=fitControl, method="glm", metric=perfmetric)
+
+## MARS
+set.seed(1234)
+earth.mod <- train(survived_d ~ ., data=trainData, trControl=fitControl, method="earth", metric=perfmetric)
+
+## CART
+set.seed(1234)
+cart.mod <- train(survived_d ~ ., data=trainData, trControl=fitControl, method="rpart", metric=perfmetric)
+
+## Random Forest
+set.seed(1234)
+rf.mod <- train(survived_d ~ ., data=trainData, trControl=fitControl, method="rf", metric=perfmetric)
+
+## Gradient Boosting
+set.seed(1234)
+boosting.mod <- train(survived_d ~ ., data=trainData, trControl=fitControl, method="xgbTree", metric=perfmetric)
+
+### 7. pick the best algo -----
+
+preds_testData <- predict(list(logit=logit.mod, MARS=earth.mod, CART=cart.mod, RF=rf.mod, Boosting=boosting.mod), newdata=testData
+                          ,type="prob")
+
+str(preds_testData)
+
+keepOnlyAlive <- function(df){
+  keep <- df$Alive
+  return(keep)
+}
+
+preds_testData_filt <- lapply(preds_testData, keepOnlyAlive)
+
+preds_testData_df <- as.data.frame(preds_testData_filt)
+
+str(preds_testData_df)
+
+library(caTools)
+
+allMods <- colAUC(preds_testData_df, testData$survived_d, plotROC = TRUE)
+
+allMods
+```
+
+## Choose the Best Model
+
+```{r}
+set.seed(1234)
+final.boosting.mod <- train(survived_d ~ ., data=etitanic2, trControl=fitControl, method="xgbTree", metric=perfmetric)
+varImp(final.boosting.mod)
+```
+
+## Choose the Most Interpretable Model
+
+```{r}
+set.seed(1234)
+final.logit.mod <- train(survived_d ~ ., data=etitanic2, trControl=fitControl, method="glm", metric=perfmetric)
+varImp(final.logit.mod)
+summary(final.logit.mod$finalModel)
+```
