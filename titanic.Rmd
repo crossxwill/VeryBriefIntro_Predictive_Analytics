@@ -3,6 +3,10 @@ title: "Surviving the Titanic"
 output: html_notebook
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+```
+
 An R script is just a text file. You can open it with any text editor (such as Notepad or RStudio). R scripts are compact and are the most popular way to write R programs. However, long script files are very difficult to read.
 
 An alternative to a script is a notebook. An R Notebook is a document with code chunks that can be executed independently and interactively, with output visible immediately beneath the input. Notebooks are very useful for teaching and presenting results in a business-friendly format. Here's the `titanic.R` script converted into an R Notebook.
